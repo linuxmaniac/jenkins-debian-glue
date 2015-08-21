@@ -260,6 +260,7 @@ dist_and_arch_settings() {
   build_lockfile="${COWBUILDER_BASE}.building.$$"
   update_lockfile="${COWBUILDER_BASE}.update"
   update_lockfile_pid="${COWBUILDER_BASE}.update.$$"
+  update_timestamp="${COWBUILDER_BASE}.timestamp"
 }
 
 cowbuilder_init() {
@@ -351,11 +352,17 @@ cowbuilder_init() {
          --hookdir "${PBUILDER_HOOKDIR}"
     [ $? -eq 0 ] || bailout 2
   else
-    echo "*** Updating cowbuilder cow base ***"
-    sudo DIST="${distribution:-}" ARCH="${architecture:-}" ${ADT:+ADT=$ADT} \
-      cowbuilder --update --basepath "${COWBUILDER_BASE}" --configfile="${pbuilderrc}"
-    [ $? -eq 0 ] || bailout 3
+    local TIME_DIFF=$(($(stat -c %Y "${COWBUILDER_BASE}") - $(cat "${update_timestamp}")))
+    if [[ $TIME_DIFF -gt ${max_dist_update[${COWBUILDER_DIST}]} ]]; then
+      echo "*** Updating cowbuilder cow base [${TIME_DIFF}] ***"
+      sudo DIST="${distribution:-}" ARCH="${architecture:-}" ${ADT:+ADT=$ADT} \
+        cowbuilder --update --basepath "${COWBUILDER_BASE}" --configfile="${pbuilderrc}"
+      [ $? -eq 0 ] || bailout 3
+    else
+      echo "*** Skipping update ***"
+    fi
   fi
+  stat -c %Y "${COWBUILDER_BASE}" > "${update_timestamp}"
   ) 9>"${update_lockfile}" ||
     {
       # depending on the exit code we have to distinguish between different failures
